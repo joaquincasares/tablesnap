@@ -23,11 +23,14 @@ log.setLevel(logging.DEBUG)
 class UploadHandler(pyinotify.ProcessEvent):
     def my_init(self, bucket=None):
         self.bucket = bucket
-        self.hostname = socket.getfqdn()
+        try:
+            self.prefix = boto.utils.get_instance_metadata()['ami-launch-index']
+        except:
+            self.prefix = socket.getfqdn()
 
     def process_IN_MOVED_TO(self, event):
         if event.pathname.find('-tmp') == -1:
-            keyname = '%s:%s' % (self.hostname, event.pathname)
+            keyname = '%s:%s' % (self.prefix, event.pathname)
             key = self.bucket.get_key(keyname)
             if key is None:
                 t = Thread(target=self.upload_sstable, args=(
@@ -63,13 +66,42 @@ def backup_files(handler, bucket, paths):
         for filename in os.listdir(path):
             if filename.find('-tmp') != -1:
                 continue
-            keyname = '%s:%s/%s' % (handler.hostname, path, filename)
+            keyname = '%s:%s/%s' % (handler.prefix, path, filename)
             if not bucket.get_key(keyname):
                 handler.upload_sstable(keyname, '%s/%s' % (path, filename), with_index=False)
             else:
                 log.info('Not uploading %s/%s, it already exists in this S3 bucket.' % (path, filename))
     return 0
 
+def dl_thread_generator(handler, bucket, local_prefix=''):
+    s3_prefix = '%s:' % (handler.prefix)
+    file_list = bucket.list(s3_prefix)
+    thread_list = []
+    for key in file_list:
+        local_file = key.name.replace(s3_prefix, local_prefix)
+        if not os.path.isdir(os.path.dirname(local_file)):
+            os.makedirs(os.path.dirname(local_file))
+
+        t = Thread(target=download_sstables, args=(
+                   key, local_file))
+        t.setDaemon(True)
+        t.start()
+        thread_list.append(t)
+
+    for t in thread_list:
+        t.join()
+    return 0
+
+def download_sstables(key, local_file):
+    log.info('Downloading %s' % key.name)
+
+    def progress(sent, total):
+        if sent == total:
+            log.info('Finished downloading %s' % key.name)
+    try:
+        key.get_contents_to_filename(local_file, cb=progress)
+    except:
+        log.error('Error downloading %s\n%s' % (key.name, format_exc()))
 
 def main():
     parser = OptionParser(usage='%prog [options] <bucket> <path> [...]')
@@ -81,6 +113,8 @@ def main():
         help='Automatically start watching new subdirectories within path(s)')
     parser.add_option('-B', '--backup', action='store_true', dest='backup',
         help='Backup existing SSTables to S3 if they\'re not already there')
+    parser.add_option('-D', '--download', action='store_true', dest='download',
+        help='Download existing SSTables on S3 to this EC2 instance')
     options, args = parser.parse_args()
 
     if len(args) < 2:
@@ -91,11 +125,18 @@ def main():
     paths = args[1:]
 
     s3 = boto.connect_s3(options.aws_key, options.aws_secret)
+
+    if not s3.lookup(bucket):
+        s3.create_bucket(bucket)
+
     bucket = s3.get_bucket(bucket)
     handler = UploadHandler(bucket=bucket)
 
     if options.backup:
         return backup_files(handler, bucket, paths)
+
+    if options.download:
+        return dl_thread_generator(handler, bucket, paths[0])
 
     wm = pyinotify.WatchManager()
     notifier = pyinotify.Notifier(wm, handler)
