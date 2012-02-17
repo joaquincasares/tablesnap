@@ -11,7 +11,22 @@ import socket
 import json
 import sys
 import os
+import ConfigParser
+import shlex
 
+
+config = ConfigParser.RawConfigParser()
+conf_paths = [os.getenv('TABLESNAP_CONF'),
+              'tablesnap.conf',
+              os.path.join(os.path.expanduser('~'), '.tablesnap.conf'),
+              '/etc/tablesnap/tablesnap.conf']
+
+for path in conf_paths:
+    try:
+        config.read(path)
+        break
+    except:
+        pass
 
 log = logging.getLogger('tablesnap')
 stderr = logging.StreamHandler()
@@ -104,6 +119,16 @@ def download_sstables(key, local_file):
         log.error('Error downloading %s\n%s' % (key.name, format_exc()))
 
 def main():
+    try:
+        conf = {}
+        conf['aws_key'] = config.get('tablesnap', 'aws_key')
+        conf['aws_secret'] = config.get('tablesnap', 'aws_secret')
+        conf['recursive'] = config.get('tablesnap', 'recursive')
+        conf['auto_add'] = config.get('tablesnap', 'auto_add')
+        conf['args'] = shlex.split(config.get('tablesnap', 'args'))
+    except:
+        pass
+
     parser = OptionParser(usage='%prog [options] <bucket> <path> [...]')
     parser.add_option('-k', '--aws-key', dest='aws_key', default=None)
     parser.add_option('-s', '--aws-secret', dest='aws_secret', default=None)
@@ -116,6 +141,12 @@ def main():
     parser.add_option('-D', '--download', action='store_true', dest='download',
         help='Download existing SSTables on S3 to this EC2 instance')
     options, args = parser.parse_args()
+
+    options.aws_key = conf['aws_key'] if 'aws_key' in conf else options.aws_key
+    options.aws_secret = conf['aws_secret'] if 'aws_secret' in conf else options.aws_secret
+    options.recursive = conf['recursive'] if 'recursive' in conf else options.recursive
+    options.auto_add = conf['auto_add'] if 'auto_add' in conf else options.auto_add
+    args = conf['args'] if 'args' in conf else args
 
     if len(args) < 2:
         parser.print_help()
