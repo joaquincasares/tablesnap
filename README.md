@@ -4,10 +4,10 @@ Tablesnap
 This Fork
 ---------
 
-Creates the bucket if not yet created.
-Adds download capabilities.
-Uses the AMI launch index within the EC2 bucket instead of the hostname, by default.
-Allows for a tablesnap.conf file to house all the command line arguments.
+* Creates the bucket if not yet created.
+* Adds download capabilities.
+* Uses the AMI launch index within the EC2 bucket instead of the hostname, by default.
+* Allows for a tablesnap.conf file to house all the command line arguments.
 
 Theory of Operation
 -------------------
