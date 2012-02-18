@@ -22,11 +22,12 @@ conf_paths = [os.getenv('TABLESNAP_CONF'),
               '/etc/tablesnap/tablesnap.conf']
 
 for path in conf_paths:
-    try:
-        config.read(path)
-        break
-    except:
-        pass
+    if path and os.path.isfile(path):
+        try:
+            config.read(path)
+            break
+        except:
+            pass
 
 log = logging.getLogger('tablesnap')
 stderr = logging.StreamHandler()

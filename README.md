@@ -1,6 +1,14 @@
 Tablesnap
 =========
 
+This Fork
+---------
+
+Creates the bucket if not yet created.
+Adds download capabilities.
+Uses the AMI launch index within the EC2 bucket instead of the hostname, by default.
+Allows for a tablesnap.conf file to house all the command line arguments.
+
 Theory of Operation
 -------------------
 
@@ -19,33 +27,16 @@ once written.
 Installation
 ------------
 
-This distribution provides a debian/ source directory, allowing it to be built
-as a standard Debian/Ubuntu package and stored in a repository. The Debian
-package includes an init script that can run and daemonize tablesnap for you.
-Tablesnap does not daemonize itself. This is best left to tools like
-init, supervisord, daemontools, etc.
-
-There are pre-build binaries for Ubuntu Maverick amd64 and i386 in this PPA:
-<https://launchpad.net/~synack/+archive/tablesnap>
-
-	# cat /etc/apt/sources.list.d/tablesnap.list << EOF
-	> deb http://ppa.launchpad.net/synack/tablesnap/ubuntu maverick main
-	> deb-src http://ppa.launchpad.net/synack/tablesnap/ubuntu maverick main
-	> EOF
-	# aptitude update
-
-If you are not a Debian/Ubuntu user or do not wish to install the tablesnap
-package, you may copy the tablesnap script anywhere you'd like and run it from
-there. Tablesnap depends on the pyinotify and boto Python packages. These are
-available via "pip install pyinotify; pip install boto;", or as packages from
-most common Linux distributions.
+Run `python setup.py install`.
 
 Configuration
 -------------
 
-All configuration for tablesnap happens on the command line. If you are using
-the Debian package, you'll set these options in the `DAEMON_OPTS` variable in
-`/etc/default/tablesnap`.
+Configurations happen in the command line or via
+`$TABLESNAP_CONF`,
+`./tablesnap.conf`,
+`~/.tablesnap.conf`, or
+`/etc/tablesnap/tablesnap.conf`.
 
     Usage: tablesnap [options] <bucket> <path> [...]
     Options:
@@ -55,15 +46,21 @@ the Debian package, you'll set these options in the `DAEMON_OPTS` variable in
       -r, --recursive       Recursively watch the given path(s)s for new SSTables
       -a, --auto-add        Automatically start watching new subdirectories within path(s)
       -B, --backup          Backup existing SSTables to S3 if they're not already there
+      -D, --download        Download existing SSTables on S3 to this EC2 instance
 
 
 For example:
 
-	$ tablesnap -k AAAAAAAAAAAAAAAA -s BBBBBBBBBBBBBBBB me.synack.sstables /var/lib/cassandra/data/GiantKeyspace
+    $ tablesnap -k AAAAAAAAAAAAAAAA -s BBBBBBBBBBBBBBBB me.synack.sstables /var/lib/cassandra/data/GiantKeyspace
 
 This would cause tablesnap to use the given Amazon Web Services credentials to
 backup the SSTables for my `GiantKeyspace` to the S3 bucket named
 `me.synack.sstables`.
+
+    $ tablesnap -k AAAAAAAAAAAAAAAA -s BBBBBBBBBBBBBBBB -D me.synack.sstables /tmp
+
+This would cause tablesnap to downlad the uploaded files into the `/tmp` directory.
+Using `/` as the path would download the files to the same directory.
 
 Questions, Comments, and Help
 -----------------------------
